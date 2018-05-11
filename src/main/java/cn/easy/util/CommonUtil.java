@@ -31,9 +31,18 @@ public final class CommonUtil {
         return m.matches();
     }
 
+    //TODO
     public static boolean checkPhone(String str) {
-        String rule_email = "^\\w+((-\\w+)|(\\.\\w+))*\\@[A-Za-z0-9]+((\\.|-)[A-Za-z0-9]+)*\\.[A-Za-z0-9]+$";
-        Pattern p = Pattern.compile(rule_email);
+        String rule_phone = "^((13[0-9])|(15[^4])|(18[0,2,3,5-9])|(17[0-8])|(147))\\d{8}$";
+        if (str.startsWith("+86")) {
+            str = str.substring(3);
+        }
+        //TODO 港澳台等国际号码
+//        if (str.startsWith("")){
+//            rule_phone="";
+//        }
+
+        Pattern p = Pattern.compile(rule_phone);
         Matcher m = p.matcher(str);
         return m.matches();
     }
@@ -374,5 +383,8 @@ public final class CommonUtil {
         return ip;
     }
 
+    public static void main(String[] args) {
+        System.out.println(checkPhone("15557006867"));
+    }
 
 }

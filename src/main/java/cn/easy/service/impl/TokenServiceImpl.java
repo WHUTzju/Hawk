@@ -2,6 +2,8 @@ package cn.easy.service.impl;
 
 import cn.easy.business.constant.BusinessConstant;
 import cn.easy.business.exception.TokenException;
+import cn.easy.dal.entity.AccountEntity;
+import cn.easy.dal.repository.AccountEntityRepo;
 import cn.easy.model.Token;
 import cn.easy.service.TokenService;
 import cn.easy.util.JwtUtils;
@@ -30,6 +32,8 @@ public class TokenServiceImpl implements TokenService {
 
     @Autowired
     private BusinessConstant businessConstant;
+    @Autowired
+    private AccountEntityRepo accountEntityRepo;
 
     @Override
     public String createJwtWithSecret(Token token, String secret) throws TokenException {
@@ -44,7 +48,7 @@ public class TokenServiceImpl implements TokenService {
     }
 
     @Override
-    public Token verifyJwt(String jwtStr,String secret) throws TokenException {
+    public Token verifyJwt(String jwtStr) throws TokenException {
         if (StringUtils.isEmpty(jwtStr)) {
             String errMsg = "jwt为空";
             logger.info(errMsg);
@@ -52,6 +56,14 @@ public class TokenServiceImpl implements TokenService {
         }
         Token token = getTokenWithoutSig(jwtStr);
         logger.info("token解析结果：" + token);
+
+        AccountEntity accountEntity = accountEntityRepo.findByPhoneOrEmail(token.getUserName(), token.getUserName());
+        if (ObjectUtils.isEmpty(accountEntity)) {
+            String errMsg = "该用户不存在";
+            logger.info(errMsg);
+            throw new TokenException(errMsg);
+        }
+        String secret = accountEntity.getPassword();
         if (StringUtils.isEmpty(secret)) {
             logger.info("用户密码为空，采用默认密钥加密");
             secret = DEFAULT_SECRETE;
@@ -72,6 +84,7 @@ public class TokenServiceImpl implements TokenService {
         }
         return token;
     }
+
     private static String getTokenStrWithoutSig(String jwt) throws TokenException {
         String[] arr = jwt.split("\\.");
         if (arr.length != 3 || StringUtils.isEmpty(arr[1])) {

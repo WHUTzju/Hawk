@@ -5,16 +5,20 @@ import cn.easy.business.constant.BusinessConstant;
 import cn.easy.business.constant.Code;
 import cn.easy.business.exception.TokenException;
 import cn.easy.business.response.BaseResult;
+import cn.easy.constant.MailContstant;
+import cn.easy.constant.SmsConstant;
+import cn.easy.constant.TemplateConstant;
 import cn.easy.dal.entity.AccountEntity;
 import cn.easy.dal.repository.AccountEntityRepo;
 import cn.easy.model.SmsCode;
 import cn.easy.model.Token;
 import cn.easy.service.LoginService;
 import cn.easy.service.TokenService;
-import cn.easy.util.CommonUtil;
-import cn.easy.util.DateUtil;
-import cn.easy.util.RandomCodeUtil;
-import cn.easy.util.VerifyCodeUtils;
+import cn.easy.util.*;
+import com.alibaba.fastjson.JSON;
+import com.aliyuncs.dysmsapi.model.v20170525.SendSmsResponse;
+import com.aliyuncs.exceptions.ClientException;
+import io.jsonwebtoken.Header;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -27,6 +31,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import javax.transaction.Transactional;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,17 +51,27 @@ public class LoginServiceImpl implements LoginService {
     private static final Logger logger = Logger.getLogger(LoginServiceImpl.class);
     //放到session中的key
     private static final String GRAPHCODEKEY = "GRAPHVERIFYCODE";
-    //todo
+    private static final String MAIL_SUBJECT = "【Easy-Tech】您的注册验证码，请及时处理！";
+
+    //todo aliyun短信签名
+    public static final String SMS_SIGNATURE = "EasyTech";
+    //todo aliyun短信模版
+    public static final String SMS_TEMPLATE_CODE = "SMS_134825040";
+    //todo 邮箱/手机号码 验证码存储
     private static Map<String, SmsCode> smsCodeMap = new HashMap<>();
 
     @Autowired
-    AccountEntityRepo accountEntityRepo;
-
+    private AccountEntityRepo accountEntityRepo;
     @Autowired
-    TokenService tokenService;
-
+    private TokenService tokenService;
     @Autowired
-    BusinessConstant businessConstant;
+    private BusinessConstant businessConstant;
+    @Autowired
+    private MailContstant mailContstant;
+    @Autowired
+    private TemplateConstant templateConstant;
+    @Autowired
+    private SmsConstant smsConstant;
 
     @Override
     @Transactional(rollbackOn = Exception.class)
@@ -66,8 +81,6 @@ public class LoginServiceImpl implements LoginService {
             baseResult.returnWithoutValue(Code.ACCOUNT_ALREADY_EXIST);
             return baseResult;
         }
-
-
         //
         AccountEntity accountEntity = AccountEntity.builder().
                 phone(phone)
@@ -110,6 +123,7 @@ public class LoginServiceImpl implements LoginService {
         Map<String, Object> jwtMap = new HashMap<>();
         jwtMap.put("token", jwtStr);
         baseResult.returnWithValue(Code.SUCCESS, jwtMap);
+
         return baseResult;
     }
 
@@ -141,6 +155,7 @@ public class LoginServiceImpl implements LoginService {
         }
         return baseResult;
     }
+
     @Override
     public BaseResult graphCodeVerify(HttpSession session, String inputCode) {
         BaseResult baseResult = new BaseResult();
@@ -166,7 +181,7 @@ public class LoginServiceImpl implements LoginService {
     public BaseResult phoneVerifyCodeSend(String type, String phone) {
         BaseResult baseResult = new BaseResult();
 //        String tplPhoneCode = ConstantFactory.get("phoneCode", "type", type).getCode();
-        String key = keyInit("@", type, phone);
+        String key = keyInit("@", type, DigestUtils.md5Hex(phone));
         SmsCode smsCode = smsCodeMap.get(key);
         long curTimestamp = System.currentTimeMillis();
         // 验证码获取太频繁
@@ -174,16 +189,17 @@ public class LoginServiceImpl implements LoginService {
             baseResult.returnWithoutValue(Code.PHONE_CODE_CREATE_FREQUENT);
             return baseResult;
         }
-        smsCode = createSmsCode();
-        String codeStr = smsCode.getCode();
+        smsCode = createSmsCode(phone);
         //TODO  发送验证码
-        Code code = sendPhoneCode(phone, codeStr);
+        Code code = sendPhoneCode(phone, smsCode.getCode());
         if (code == Code.SUCCESS) {
             smsCodeMap.put(key, smsCode);
         }
+
         baseResult.returnWithValue(code, smsCode);
         return baseResult;
     }
+
     @Override
     public BaseResult phoneVerifyCodeVerify(String type, String phone, String inputCode) {
         BaseResult baseResult = new BaseResult();
@@ -218,14 +234,53 @@ public class LoginServiceImpl implements LoginService {
 
     //邮箱验证码
     @Override
-    public BaseResult emailVerifyCodeSend(String type, String email) {
-        return null;
-    }
-    @Override
-    public BaseResult emailVerifyCodeVerify(String type, String email, String inputCode) {
-        return null;
+    public BaseResult emailVerifyCodeSend(String type, String email) throws IOException {
+        BaseResult baseResult = new BaseResult();
+        //生成验证码
+        String key = keyInit("@", type, DigestUtils.md5Hex(email));
+        SmsCode smsCode = smsCodeMap.get(key);
+        long curTimestamp = System.currentTimeMillis();
+        // 验证码获取太频繁
+        if (!ObjectUtils.isEmpty(smsCode) && curTimestamp < smsCode.getReSendTime()) {
+            baseResult.returnWithoutValue(Code.PHONE_CODE_CREATE_FREQUENT);
+            return baseResult;
+        }
+        smsCode = createSmsCode(email);
+        //存储验证码
+        smsCodeMap.put(key, smsCode);
+        String codeStr = smsCode.getCode();
+        //TODO  发送验证码
+        Code code = sendMailCode(email, codeStr, MAIL_SUBJECT);
+        baseResult.returnWithoutValue(code);
+        return baseResult;
     }
 
+    @Override
+    public BaseResult emailVerifyCodeVerify(String type, String email, String inputCode) {
+        BaseResult baseResult = new BaseResult();
+        //生成验证码 c1d27c21829ebe8fa08f5029490b9ad0
+        String key = keyInit("@", type, DigestUtils.md5Hex(email));
+        SmsCode smsCode = smsCodeMap.get(key);
+        if (ObjectUtils.isEmpty(smsCode)) {
+            baseResult.returnWithoutValue(Code.MAIL_CODE_VERIFY_ERROR);
+            return baseResult;
+        }
+        String codeStr = smsCode.getCode();
+
+        long curTimestamp = System.currentTimeMillis();
+        if (curTimestamp > smsCode.getValidTime()) {
+            baseResult.returnWithoutValue(Code.MAIL_CODE_EXPIRE_TIME);
+            return baseResult;
+        }
+
+        if (!StringUtils.equals(codeStr, inputCode)) {
+            baseResult.returnWithoutValue(Code.MAIL_CODE_VERIFY_ERROR);
+            return baseResult;
+        }
+        baseResult.returnWithoutValue(Code.SUCCESS);
+
+        return baseResult;
+    }
 
     private static String keyInit(String separator, String... param) {
         if (param.length == 0) return null;
@@ -237,44 +292,54 @@ public class LoginServiceImpl implements LoginService {
         return ret.toString();
     }
 
-    protected SmsCode createSmsCode() {
+
+    protected SmsCode createSmsCode(String phoneMail) {
         String code = RandomCodeUtil.getRandomNumCode(6);
+        logger.info("新的验证码=" + code);
         long createTime = System.currentTimeMillis();
         long reSendTime = DateUtil.timestampSecondAfter(createTime, businessConstant.SMS_CODE_RESEND);
         long validTime = DateUtil.timestampSecondAfter(createTime, businessConstant.SMS_CODE_VALID);
-        SmsCode smsCode = new SmsCode(code, createTime, reSendTime, validTime);
-
+        SmsCode smsCode = new SmsCode(phoneMail, code, createTime, reSendTime, validTime);
         return smsCode;
     }
 
     //TODO SMS服务
-    private Code sendPhoneCode(String phone, String smsCode) {
+    private Code sendPhoneCode(String phone, String codeStr) {
 
-//        Map<String, String> params = new HashMap<>();
-//        params.put("code", smsCode);
-//        String paramStr = JSON.toJSONString(params);
-//
-//
-//        boolean sendSuccess = false;
-//        int count = 0;
-//
-//        while (!sendSuccess && count < businessConstant.PHONE_CODE_RESEND) {
-//            count++;
-//            SendSmsResponse sendSmsResponse = SMSUtil.sendSms(phone, SMSUtil.XIMEI_SIGNATURE, tplPhoneCode, paramStr);
-//            if (sendSmsResponse.getCode().equals("OK")) {
-//                sendSuccess = true;
-//                break;
-//            }
-//            logger.info(JSON.toJSONString(sendSmsResponse));
-//        }
-//
-//
-//        if (!sendSuccess) {
-//            return Code.PHONE_CODE_SEND_ERROR;
-//        }
+        Map<String, String> params = new HashMap<>();
+        params.put("code", codeStr);
+        String paramStr = JSON.toJSONString(params);
 
+        boolean sendSuccess = false;
+        int count = 0;
+
+        while (!sendSuccess && count < businessConstant.PHONE_CODE_RESEND) {
+            count++;
+            SendSmsResponse sendSmsResponse = null;
+            try {
+                sendSmsResponse = smsConstant.sendSms(phone, SMS_SIGNATURE, SMS_TEMPLATE_CODE, paramStr);
+                if (sendSmsResponse.getCode() != null && sendSmsResponse.getCode().equals("OK")) {
+                    sendSuccess = true;
+                    break;
+                }
+                logger.info(JSON.toJSONString(sendSmsResponse));
+            } catch (ClientException e) {
+                logger.error("短信服务异常" + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        if (!sendSuccess) {
+            return Code.PHONE_CODE_SEND_ERROR;
+        }
         return Code.SUCCESS;
 
+    }
+
+    private Code sendMailCode(String mail, String mailCode, String subject) throws IOException {
+        Map<String, Object> model = new HashMap<>();
+        model.put("verifyCode", mailCode);
+        String htmlMsg = templateConstant.createMailText(model);
+        return mailContstant.sendMail(mail, htmlMsg, subject);
     }
 
 }

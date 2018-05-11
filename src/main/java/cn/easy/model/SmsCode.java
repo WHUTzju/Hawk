@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class SmsCode {
+    private String phoneMail;
     private String code;
     private long createTime;
     private long reSendTime;

@@ -11,7 +11,7 @@ public interface TokenService {
 
     String createJwtWithSecret(Token token, String secret) throws TokenException;
 
-    Token verifyJwt(String jwtStr,String secret) throws TokenException;
+    Token verifyJwt(String jwtStr) throws TokenException;
 
     Token getTokenWithoutSig(String jwtStr) throws TokenException;
 }

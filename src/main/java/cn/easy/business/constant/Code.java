@@ -8,7 +8,7 @@ public enum Code {
     //通用部分
     UNDEFINED(-1, "未定义"),
     SUCCESS(0, "成功"),
-    DEBUG(1,"调试模式"),
+    DEBUG(1, "调试模式"),
 
     ///账户管理及验证部分
 
@@ -16,24 +16,29 @@ public enum Code {
     USER_NOT_LOGIN(1201, "账户未登陆"),
     USER_FROZEN(1202, "账号已冻结"),
 
-    SMS_CODE_EXPIRE_TIME(1700,"手机验证码过期"),
-    SMS_CODE_VERIFY_ERROR(1701,"手机验证码错误"),
-    SMS_CODE_RESEND_FREQUENT(1702,"手机验证码过于频繁"),
-    SMS_CODE_TPL_NOT_EXIST(1703,"短信验证码模板不存在"),
+    SMS_CODE_EXPIRE_TIME(1700, "手机验证码过期"),
+    SMS_CODE_VERIFY_ERROR(1701, "手机验证码错误"),
+    SMS_CODE_RESEND_FREQUENT(1702, "手机验证码过于频繁"),
+    SMS_CODE_TPL_NOT_EXIST(1703, "短信验证码模板不存在"),
 
 
-    GRAPH_CODE_CREATE_ERROR(1710,"图片验证码生成错误"),
-    GRAPH_CODE_VERIFY_ERROR(1711,"验证码错误"),
+    GRAPH_CODE_CREATE_ERROR(1710, "图片验证码生成错误"),
+    GRAPH_CODE_VERIFY_ERROR(1711, "验证码错误"),
     PHONE_CODE_CREATE_FREQUENT(1712, "获取手机验证码太频繁"),
     PHONE_CODE_VERIFY_ERROR(1713, "手机验证码错误"),
     PHONE_CODE_EXPIRE_TIME(1714, "验证码过期，请重新获取"),
     PHONE_CODE_SEND_ERROR(1715, "手机验证码发送异常"),
 
-    PASSWORD_NOT_EQUAL(1716,"两次密码输入不一致"),
+    PASSWORD_NOT_EQUAL(1716, "两次密码输入不一致"),
+    MAIL_SEND_ERROR(1717, "邮件发送失败"),
+    MAIL_CODE_VERIFY_ERROR(1718, "邮箱验证码错误"),
+    MAIL_CODE_EXPIRE_TIME(1719, "验证码过期，请重新获取"),
+    MAIL_CODE_SEND_ERROR(1720, "邮箱验证码发送异常"),
+
 
     ///通用部分
-    PARAMETER_ERROR(8001,"参数校验异常"),
-    PHONE_FORMAT_ERROR(8002,"邮箱或手机号码格式不对"),
+    PARAMETER_ERROR(8001, "参数校验异常"),
+    PHONE_FORMAT_ERROR(8002, "邮箱或手机号码格式不对"),
 
     PERMISSION_DENIED(9001, "权限拒绝"),
     UNKNOWN_ABNORMAL(9002, "未知异常"),
@@ -50,10 +55,10 @@ public enum Code {
 
     JSON_TRANSFER_ERROR(9200, "JSON转化异常"),
 
-    CLIENT_NOT_REGISTER(9300,"业务系统未注册"),
-    CLIENT_ALREADY_REGISTER(9301,"业务系统已注册"),
+    CLIENT_NOT_REGISTER(9300, "业务系统未注册"),
+    CLIENT_ALREADY_REGISTER(9301, "业务系统已注册"),
 
-    CLIENT_ROLE_NOT_EXIST(9400,"该业务系统该角色不存在"),
+    CLIENT_ROLE_NOT_EXIST(9400, "该业务系统该角色不存在"),
 
     SYSTEM_ERROR(9999, "系统异常，请稍后重试");
 
